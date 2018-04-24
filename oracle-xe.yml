@@ -1,0 +1,85 @@
+---
+- hosts: all
+  remote_user: root
+  tasks:
+    # - name: ensure packages required are installed (may take several minutes)
+      # yum: pkg={{item}} state=latest
+      # with_items:
+        # - libaio
+        # - bc
+        # - flex
+        # - unzip
+        # - net-tools
+    # if your internet is slow download from link below and run these commands
+    #package local files downloaded from http://mirror.centos.org/centos/7/os/x86_64/Packages/
+    - name: install libaio package
+      yum:
+        name: /vagrant/packagesForCentOS/libaio-0.3.109-13.el7.x86_64.rpm
+        state: present
+    - name: install bc package
+      yum:
+        name: /vagrant/packagesForCentOS/bc-1.06.95-13.el7.x86_64.rpm
+        state: present
+    - name: install flex package
+      yum:
+        name: /vagrant/packagesForCentOS/flex-2.5.37-3.el7.x86_64.rpm
+        state: present
+    - name: install unzip package
+      yum:
+        name: /vagrant/packagesForCentOS/unzip-6.0-16.el7.x86_64.rpm
+        state: present
+    - name: install net-tools package
+      yum:
+        name: /vagrant/packagesForCentOS/net-tools-2.0-0.22.20131004git.el7.x86_64.rpm
+        state: present
+    - name: ensure oracle install directory /vagrant/oracle exists
+      file:
+        path: /vagrant/oracle
+        state: directory
+
+        
+    #- name: increase swap size in order to install oracle  
+    - name: Check that the /swapfile exists
+      stat:
+        path: /swapfile
+      register: stat_result
+
+    - name: create the file to be used for swap
+      command: dd if=/dev/zero of=/swapfile bs=1k count=2048k
+      when: stat_result.stat.exists == False
+    
+    - name: format the file for swap
+      command: mkswap /swapfile
+      when: stat_result.stat.exists == False
+      
+    - name: change swap file permissions
+      file: path=/swapfile owner=root group=root mode=0600
+      when: stat_result.stat.exists == False
+      
+    - name: add the file to the system as a swap file
+      command: swapon /swapfile
+      when: stat_result.stat.exists == False
+      
+    - name: write swap entry in fstab
+      mount: name=none src=/swapfile fstype=swap opts=sw passno=0 dump=0 state=present
+      when: stat_result.stat.exists == False
+      
+      
+    - name: unzip oracle rpm
+      command: /usr/bin/unzip -u /vagrant/oracle*.rpm.zip -d /vagrant/oracle warn=False
+    
+    
+    - name: install oracle (this could take a long time so be patient)
+      yum:
+        name: /vagrant/oracle/Disk1/oracle-xe-11.2.0-1.0.x86_64.rpm
+        state: present
+    
+    - name: configure oracle from /vagrant/xe.rsp
+      shell: /etc/init.d/oracle-xe configure responseFile=/vagrant/xe.rsp
+      ignore_errors: True
+    
+    - name: setup oracle environment for post this script
+      shell: /u01/app/oracle/product/11.2.0/xe/bin/oracle_env.sh
+    
+    - name: setup oracle environment on bash_profile
+      shell: /bin/echo 'source /u01/app/oracle/product/11.2.0/xe/bin/oracle_env.sh' >> /home/vagrant/.bash_profile
